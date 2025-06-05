@@ -16,3 +16,20 @@ const connectDb = async () => {
 };
 
 export default connectDb;
+
+//import express from "express";
+
+// const app = express()(async () => {
+//   try {
+//     await mongoose.connect(`${process.env.MONGODV_URI}${DB_NAME}`);
+//     app.on("error", (error) => {
+//       console.log("error:", error);
+//     });
+//     app.listen(process.env.PORT, () => {
+//       console.log(`db connected at http://localhost:${process.env.PORT}`);
+//     });
+//   } catch (error) {
+//     console.log(error);
+//     throw error;
+//   }
+// })();
