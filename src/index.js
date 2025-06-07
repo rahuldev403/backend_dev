@@ -6,7 +6,7 @@ const port = process.env.PORT || 8000;
 connectDb()
   .then(() => {
     app.listen(port, () => {
-      console.log("server is running at port", port);
+      console.log("server is running at port:", port);
     });
     app.on("error", (error) => {
       console.log("mongodeb connection error:", error);
