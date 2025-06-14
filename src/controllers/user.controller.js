@@ -199,48 +199,72 @@ const logOutUser = asyncHandeler(async (req, res) => {
     .clearCookie("refreshToken", options)
     .json(new ApiResponse(200, {}, "User logged out successfully"));
 });
-
+//--- CONTROLER FOR REFRESHTOKEN ---
 const refreshAccessToken = asyncHandeler(async (req, res) => {
   try {
+    // Step 1: Get the refresh token from the incoming request.
+    // It can be sent either as a cookie or in the request body.
     const incomingRefreshToken =
       req.cookies.refreshToken || req.body.refreshToken;
+
+    // Step 2: If no refresh token is provided, the request is unauthorized.
     if (!incomingRefreshToken) {
-      throw new ApiError(401, "unauthorised request");
+      throw new ApiError(401, "Unauthorized request");
     }
+
+    // Step 3: Verify the incoming refresh token using the secret key.
+    // This will throw an error if the token is expired, malformed, or has an invalid signature.
     const decodedToken = jwt.verify(
       incomingRefreshToken,
       process.env.REFRESH_TOKEN_SECRET
     );
 
-    const user = User.findById(decodedToken?._id);
+    // Step 4: Find the user in the database based on the ID stored inside the decoded token.
+    // BUG FIX: Added `await` to ensure we wait for the database query to complete.
+    const user = await User.findById(decodedToken?._id);
+
+    // Step 5: If no user is found for that ID, the refresh token is invalid.
     if (!user) {
-      throw new ApiError(401, "Invalid refresh-token");
-    }
-    if (incomingRefreshToken !== user?.refreshToken) {
-      throw new ApiError(401, "Refresh token is expired or used");
+      throw new ApiError(401, "Invalid refresh token");
     }
 
-    const options = {
-      httpOnly: true,
-      secure: true,
-    };
-    const { accessToken, newRefreshToken } =
+    // Step 6: IMPORTANT SECURITY CHECK: Compare the incoming token with the one stored in our database.
+    // This ensures that the token hasn't been used or invalidated (e.g., by logging out).
+    if (incomingRefreshToken !== user?.refreshToken) {
+      throw new ApiError(401, "Refresh token is expired or has been used");
+    }
+
+    // Step 7: Generate a new pair of access and refresh tokens.
+    // This is called "Refresh Token Rotation" and is a security best practice.
+    // BUG FIX: Correctly destructured the returned object.
+    const { accessToken, refreshToken: newRefreshToken } =
       await generateAccessAndReferenceTokens(user._id);
 
+    // Step 8: Define secure options for setting the new cookies.
+    const options = {
+      httpOnly: true, // Prevents client-side JavaScript from accessing the cookie.
+      secure: true, // Ensures the cookie is only sent over HTTPS.
+    };
+
+    // Step 9: Send the new tokens back to the client in secure cookies and as a JSON response.
     return res
       .status(200)
       .cookie("accessToken", accessToken, options)
       .cookie("refreshToken", newRefreshToken, options)
       .json(
+        // BUG FIX: Structured the response data correctly.
         new ApiResponse(
           200,
-          accessToken,
-          { refreshToken: newRefreshToken },
-          "Access token refreshed"
+          {
+            accessToken,
+            refreshToken: newRefreshToken,
+          },
+          "Access token refreshed successfully"
         )
       );
   } catch (error) {
-    throw new ApiError(401, error?.message || "invalid refresh token");
+    // If any part of the process fails, catch the error and send a 401 Unauthorized response.
+    throw new ApiError(401, error?.message || "Invalid refresh token");
   }
 });
 
